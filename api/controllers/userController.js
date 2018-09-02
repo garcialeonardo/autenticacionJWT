@@ -3,6 +3,7 @@
 var mongoose = require('mongoose'),
   jwt = require('jsonwebtoken'),
   bcrypt = require('bcrypt'),
+  axios = require('axios'),
   User = mongoose.model('User');
 
 exports.list_all_users = function(req, res) {
@@ -15,16 +16,34 @@ exports.list_all_users = function(req, res) {
 
 exports.register = function(req, res) {
   var newUser = new User(req.body);
-  newUser.hash_password = bcrypt.hashSync(req.body.password, 10);
-  newUser.save(function(err, user) {
-    if (err) {
-      return res.status(400).send({
-        message: err
+  var domain = req.body.email.split('@', 2)[1];
+  axios.get(`https://dns-api.org/MX/${domain}`)
+  .then(resp => {
+    var responseDomain = resp.data;
+    if (responseDomain.error != 'NXDOMAIN') {
+      newUser.hash_password = bcrypt.hashSync(req.body.password, 10);
+      newUser.save(function(err, user) {
+        if (err) {
+          return res.status(400).send({
+            message: err
+          });
+        } else {
+          user.hash_password = undefined;
+          return res.json(user);
+        }
       });
     } else {
-      user.hash_password = undefined;
-      return res.json(user);
+      res.status(400).json({
+        ok: false,
+        error: "Dominio inexistente"
+      });
     }
+  })
+  .catch(e => {
+    res.status(400).json({
+      ok: false,
+      error: e
+    });
   });
 };
 
